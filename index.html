@@ -143,6 +143,23 @@
   .plan .lbl{font-size:12px;color:var(--sage);margin:10px 0 6px}
   .plan .chips2{display:flex;flex-wrap:wrap;gap:6px}
   .plan .chips2 i{font-style:normal;font-size:13px;padding:5px 11px;border-radius:99px;background:rgba(239,231,220,.14);border:1px solid rgba(239,231,220,.2)}
+  .plan .ps .pst{flex:1;border:0;color:inherit;background:rgba(239,231,220,.12);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer;font:inherit}
+  .plan .ps .pst:active{transform:scale(.97)}
+  .plan .ps .ok,.plan .ps .pst.ok{background:rgba(239,231,220,.9);color:var(--terra)}
+  .plan .ps .ok span{color:var(--terra)}
+  .plan .ps .of{display:block;font-size:10px;opacity:.75;margin-top:1px}
+  .plan .ps .ok .of{color:var(--terra)}
+  .plan .ps b small{font-size:13px;opacity:.7;font-weight:400}
+  .plan .chips2 em{font-style:normal;opacity:.75;margin-left:2px}
+  .plan .chips2 .pc{font:inherit;font-size:14px;padding:8px 13px;border-radius:99px;background:rgba(239,231,220,.14);border:1px solid rgba(239,231,220,.35);color:var(--cream);cursor:pointer}
+  .plan .chips2 .pc.part{background:rgba(239,231,220,.28)}
+  .plan .chips2 .pc.ok,.plan .chips2 i.ok{background:rgba(239,231,220,.92);color:var(--terra);border-color:transparent}
+  .plan .chips2 .pc:active{transform:scale(.96)}
+  .plan button:disabled{opacity:.6}
+  .phint{font-size:12px;color:var(--sage);margin:-4px 0 4px}
+  .pundo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:8px 8px 8px 14px;border-radius:12px;background:rgba(0,0,0,.18);font-size:13px}
+  .pundo button{border:0;background:var(--cream);color:var(--terra);border-radius:10px;padding:7px 12px;font:inherit;font-size:13px;font-weight:500;cursor:pointer}
+  .perr{margin-top:10px;font-size:13px;color:#f3c9b5}
   .plan .pn{font-size:14px;line-height:1.4;margin-top:4px}
   .plan.dept{background:var(--olive)}
   .mot .mt{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
@@ -361,19 +378,65 @@ function monBlock(m) {
     ${row('Выручка кальянов', m.hookahRev, true)}${row('Кальянов', m.hookahCnt)}${row('Выручка чая', m.teaRev, true)}${row('Чая (досок)', m.teaCnt)}${row('Допустимые перезабивы', m.refills, false, true)}
     ${pos.length ? '<div class="mh" style="margin-top:14px">Позиции кальянов</div>' + pos.map(x => row(x.name, [x.plan, x.fact])).join('') : ''}</div></div>`;
 }
-function planCard(p, showWho) {
-  const dt = toDate(p.date), t = todayStr() === p.date;
+function planItems(p) {
+  const out = [], n = v => parseFloat(String(v || '').replace(',', '.')) || 0;
+  if (n(p.hookahs) > 0) out.push({ key: 'h', label: 'кальянов', qty: n(p.hookahs), stat: 1 });
+  if (n(p.mods) > 0) out.push({ key: 'm', label: 'модификаторов', qty: n(p.mods), stat: 1 });
+  if (n(p.teaN) > 0) out.push({ key: 't', label: 'чая', qty: n(p.teaN), stat: 1 });
+  const list = (s, pref, grp) => String(s || '').split(',').map(x => x.trim()).filter(Boolean).forEach(x => {
+    const m = x.match(/^(.+?)(?:\s+|\s*[×xх*]\s*)(\d+)\s*$/i);
+    const name = m ? m[1].trim() : x, qty = m ? Number(m[2]) : 1;
+    if (name) out.push({ key: pref + name.toLowerCase().replace(/ё/g, 'е'), label: name, qty, grp });
+  });
+  list(p.positions, 'p:', 'pos'); list(p.tea, 'c:', 'tea');
+  return out;
+}
+function planCard(p, showWho, pi) {
+  const dt = toDate(p.date), t = todayStr() === p.date, d = state.data;
   const lab = t ? 'Сегодня' : dt.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  const stats = [[p.hookahs, 'кальянов'], [p.mods, 'модификаторов'], [p.teaN, 'чая']].filter(x => x[0]);
-  const chips = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean).map(x => `<i>${esc(x)}</i>`).join('');
   const title = p.dept ? 'Общий план отдела' : (showWho ? esc(p.who) : 'План на смену');
+  const can = !p.dept && p.done && ((t && nk(p.who) === nk(d.me)) || d.isAdmin);
+  const items = planItems(p), done = p.done || {};
+  const busy = state.planBusy === pi;
+  const stat = it => { const v = done[it.key] || 0, left = Math.max(it.qty - v, 0), ok = p.done && left === 0, over = v - it.qty;
+    const big = p.done ? (ok ? '✓' + (over > 0 ? '<small> +' + over + '</small>' : '') : left) : it.qty;
+    const sub = p.done ? `<span>${it.label}</span><span class="of">${ok ? 'план выполнен' : 'осталось из ' + it.qty}</span>` : `<span>${it.label}</span>`;
+    return can ? `<button class="pst ${ok ? 'ok' : ''}" ${busy ? 'disabled' : ''} onclick="planMark(${pi},'${it.key}',1)"><b>${big}</b>${sub}</button>`
+      : `<div class="${ok ? 'ok' : ''}"><b>${big}</b>${sub}</div>`; };
+  const chip = it => { const v = done[it.key] || 0, left = Math.max(it.qty - v, 0), ok = p.done && left === 0;
+    const txt = ok ? `✓ ${esc(it.label)}` : `${esc(it.label)} <em>${p.done ? left : it.qty}</em>`;
+    if (!can) return `<i class="${ok ? 'ok' : ''}">${txt}</i>`;
+    return `<button class="pc ${ok ? 'ok' : v ? 'part' : ''}" ${busy ? 'disabled' : ''} onclick="planMark(${pi},'${esc(it.key).replace(/'/g, '&#39;')}',${ok ? -1 : 1})">${txt}</button>`; };
+  const stats = items.filter(x => x.stat), pos = items.filter(x => x.grp === 'pos'), tea = items.filter(x => x.grp === 'tea');
+  const undo = state.planUndo && state.planUndo.pi === pi ? `<div class="pundo"><span>${esc(state.planUndo.text)}</span><button onclick="planUndo()">Отменить</button></div>` : '';
   return `<div class="card plan ${p.dept ? 'dept' : ''}"><div class="ph"><b>${title}</b><span>${esc(lab)}</span></div>
-    ${stats.length ? `<div class="ps">${stats.map(x => `<div><b>${esc(x[0])}</b><span>${x[1]}</span></div>`).join('')}</div>` : ''}
-    ${p.positions ? `<div class="lbl">Обязательные позиции</div><div class="chips2">${chips(p.positions)}</div>` : ''}
-    ${p.tea ? `<div class="lbl">Чай</div><div class="chips2">${chips(p.tea)}</div>` : ''}
+    ${stats.length ? `<div class="ps">${stats.map(stat).join('')}</div>` : ''}
+    ${can ? '<div class="phint">Выполнил — нажми, количество уменьшится. Нажми на выполненную позицию, чтобы вернуть её.</div>' : ''}
+    ${pos.length ? `<div class="lbl">Обязательные позиции</div><div class="chips2">${pos.map(chip).join('')}</div>` : ''}
+    ${tea.length ? `<div class="lbl">Чай</div><div class="chips2">${tea.map(chip).join('')}</div>` : ''}
+    ${undo}${state.planErr && state.planErr.pi === pi ? `<div class="perr">${esc(state.planErr.t)}</div>` : ''}
     ${p.note ? `<div class="lbl">Заметка</div><div class="pn">${esc(p.note)}</div>` : ''}
 </div>`;
 }
+async function planMark(pi, key, delta, isUndo) {
+  const d = state.data, p = (d.plans || [])[pi]; if (!p || state.planBusy != null) return;
+  const it = planItems(p).find(x => x.key === key); if (!it) return;
+  p.done = p.done || {};
+  const cur = p.done[key] || 0;
+  if (delta < 0 && cur <= 0) return;
+  state.planBusy = pi; state.planErr = null; p.done[key] = cur + delta;
+  clearTimeout(state.planUndoT);
+  state.planUndo = isUndo ? null : { pi, key, delta, text: `${it.stat ? it.label.charAt(0).toUpperCase() + it.label.slice(1) : it.label}: ${delta > 0 ? '+1' : '−1'}` };
+  render();
+  try {
+    const r = await api({ ...state.auth, action: 'planMark', date: p.date, who: p.who, key, delta });
+    if (r.ok && r.plans) d.plans = r.plans;
+    else { p.done[key] = cur; state.planUndo = null; state.planErr = { pi, t: r.error || 'Не получилось' }; }
+  } catch (e) { p.done[key] = cur; state.planUndo = null; state.planErr = { pi, t: 'Нет связи — отметка не сохранилась' }; }
+  state.planBusy = null; saveCache(d); render();
+  if (state.planUndo) state.planUndoT = setTimeout(() => { state.planUndo = null; if (state.view === 'plans') render(); }, 6000);
+}
+function planUndo() { const u = state.planUndo; if (!u) return; state.planUndo = null; planMark(u.pi, u.key, -u.delta, true); }
 
 function viewPlans() {
   const d = state.data, me = d.me, today = toDate(todayStr());
@@ -382,10 +445,10 @@ function viewPlans() {
   let h = `<h2>Планы</h2>`;
   const td = mine.filter(p => p.date === todayStr()), next = mine.filter(p => p.date !== todayStr());
   const ord = (a, b) => (b.dept - a.dept) || (nk(a.who) === nk(me) ? -1 : nk(b.who) === nk(me) ? 1 : a.who.localeCompare(b.who));
-  if (td.length) h += '<div class="sec">Сегодня</div>' + td.sort(ord).map(p => planCard(p, d.isAdmin || p.dept ? true : false)).join('');
+  if (td.length) h += '<div class="sec">Сегодня</div>' + td.sort(ord).map(p => planCard(p, d.isAdmin || p.dept ? true : false, d.plans.indexOf(p))).join('');
   else h += '<div class="card"><div class="note">На сегодня план не выставлен</div></div>';
   h += monBlock(d.month);
-  if (next.length) h += '<div class="sec">Впереди</div>' + next.sort((a, b) => toDate(a.date) - toDate(b.date) || ord(a, b)).map(p => planCard(p, d.isAdmin)).join('');
+  if (next.length) h += '<div class="sec">Впереди</div>' + next.sort((a, b) => toDate(a.date) - toDate(b.date) || ord(a, b)).map(p => planCard(p, d.isAdmin, d.plans.indexOf(p))).join('');
   return h;
 }
 
