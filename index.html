@@ -341,7 +341,7 @@ function setData(d, keepDay) {
   if (!state.homeTab) state.homeTab = d.tab;
   const days = [...new Set(d.shifts.map(s => s.date))];
   if (!(keepDay && days.includes(state.day))) state.day = days.includes(todayStr()) ? todayStr() : days[0];
-  if (state.view === 'team' && !d.isAdmin) state.view = 'my';
+  if (state.view === 'team') state.view = d.isAdmin ? 'pay' : 'my';
   render();
 }
 
@@ -470,7 +470,6 @@ function viewNotes() {
 function render() {
   const d = state.data;
   const tabs = [['my', ICON.my, 'Смены'], ['all', ICON.all, 'График'], ['plans', ICON.plans, 'Планы'], ['motiv', ICON.motiv, 'Мотивация'], ['pay', ICON.pay, 'Зарплата'], ['resp', ICON.resp, 'Пассы']];
-  if (d.isAdmin) tabs.push(['team', ICON.team, 'Команда']);
   $('#navIn').innerHTML = tabs.map(([k, i, t]) => `<button class="${state.view === k ? 'on' : ''}" onclick="go('${k}')">${i}${t}</button>`).join('');
   $('#nav').hidden = false; $('#nav').classList.toggle('many', tabs.length > 6);
   const cnt = unreadCount();
@@ -746,9 +745,9 @@ function payCard(p) {
 function viewPay() {
   const d = state.data, p = d.pay.find(x => x.name === d.me);
   let h = `<h2>Зарплата</h2><div class="hello">${esc(d.title)}</div>`;
-  if (!p) return h + '<div class="empty">Расчёт пока не готов</div>';
-  h += payCard(p);
+  h += p ? payCard(p) : '<div class="empty">Расчёт пока не готов</div>';
   if (d.revenue && !d.isAdmin) h += `<div class="card"><div class="note">Выручка месяца</div><div class="big" style="font-size:24px">${rub(d.revenueTotal)}</div></div>`;
+  if (d.isAdmin) h += viewTeam();
   return h;
 }
 
@@ -783,7 +782,7 @@ function viewTeam() {
   const filled = rev.filter(r => r.sum > 0);
   const avg = filled.length ? filled.reduce((a, r) => a + r.sum, 0) / filled.length : 0;
   const fund = d.pay.reduce((a, p) => a + p.total, 0);
-  let h = `<h2>Команда</h2>
+  let h = `<div class="sec" style="margin-top:26px">Команда</div>
     <div class="stats"><div class="stat"><b style="font-size:15px">${rub(d.revenueTotal)}</b><span>выручка</span></div>
     <div class="stat"><b style="font-size:15px">${rub(avg)}</b><span>в среднем/день</span></div>
     <div class="stat"><b style="font-size:15px">${rub(fund)}</b><span>фонд ЗП</span></div></div>`;
