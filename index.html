@@ -156,6 +156,17 @@
   .plan .chips2 .pc.ok,.plan .chips2 i.ok{background:rgba(239,231,220,.92);color:var(--terra);border-color:transparent}
   .plan .chips2 .pc:active{transform:scale(.96)}
   .plan button:disabled{opacity:.6}
+  .plan .ps .pstw{flex:1;position:relative;display:flex}
+  .plan .ps .pstw .pst{width:100%}
+  .plan .ps .pstw .pmin{position:absolute;top:4px;left:4px}
+  .plan .pmin{width:26px;height:26px;border-radius:50%;border:0;background:rgba(0,0,0,.22);color:#fff;font:inherit;font-size:17px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;flex:none}
+  .plan .ps .ok .pmin,.plan .pcw.ok .pmin{background:rgba(88,101,79,.85)}
+  .plan .chips2 .pcw{display:inline-flex;align-items:center;gap:4px;border-radius:99px;background:rgba(239,231,220,.14);border:1px solid rgba(239,231,220,.35);padding:3px}
+  .plan .chips2 .pcw.part{background:rgba(239,231,220,.28)}
+  .plan .chips2 .pcw.ok{background:rgba(239,231,220,.92);border-color:transparent}
+  .plan .chips2 .pcw .pc{background:none;border:0;padding:5px 10px;opacity:1}
+  .plan .chips2 .pcw.ok .pc{color:var(--terra)}
+  .psync{font-size:12px;color:var(--sage);margin-top:8px}
   .phint{font-size:12px;color:var(--sage);margin:-4px 0 4px}
   .pundo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:8px 8px 8px 14px;border-radius:12px;background:rgba(0,0,0,.18);font-size:13px}
   .pundo button{border:0;background:var(--cream);color:var(--terra);border-radius:10px;padding:7px 12px;font:inherit;font-size:13px;font-weight:500;cursor:pointer}
@@ -539,46 +550,66 @@ function planCard(p, showWho, pi) {
   const title = p.dept ? 'Общий план отдела' : (showWho ? esc(p.who) : 'План на смену');
   const can = !p.dept && p.done && ((t && nk(p.who) === nk(d.me)) || d.isAdmin);
   const items = planItems(p), done = p.done || {};
-  const busy = state.planBusy === pi;
+  const K = it => esc(it.key).replace(/'/g, '&#39;');
+  const minus = it => `<button class="pmin" aria-label="Вернуть одну" onclick="event.stopPropagation();planMark(${pi},'${K(it)}',-1)">−</button>`;
   const stat = it => { const v = done[it.key] || 0, left = Math.max(it.qty - v, 0), ok = p.done && left === 0, over = v - it.qty;
     const big = p.done ? (ok ? '✓' + (over > 0 ? '<small> +' + over + '</small>' : '') : left) : it.qty;
     const sub = p.done ? `<span>${it.label}</span><span class="of">${ok ? 'план выполнен' : 'осталось из ' + it.qty}</span>` : `<span>${it.label}</span>`;
-    return can ? `<button class="pst ${ok ? 'ok' : ''}" ${busy ? 'disabled' : ''} onclick="planMark(${pi},'${it.key}',1)"><b>${big}</b>${sub}</button>`
+    return can ? `<div class="pstw"><button class="pst ${ok ? 'ok' : ''}" onclick="planMark(${pi},'${K(it)}',1)"><b>${big}</b>${sub}</button>${v > 0 ? minus(it) : ''}</div>`
       : `<div class="${ok ? 'ok' : ''}"><b>${big}</b>${sub}</div>`; };
   const chip = it => { const v = done[it.key] || 0, left = Math.max(it.qty - v, 0), ok = p.done && left === 0;
     const txt = ok ? `✓ ${esc(it.label)}` : `${esc(it.label)} <em>${p.done ? left : it.qty}</em>`;
     if (!can) return `<i class="${ok ? 'ok' : ''}">${txt}</i>`;
-    return `<button class="pc ${ok ? 'ok' : v ? 'part' : ''}" ${busy ? 'disabled' : ''} onclick="planMark(${pi},'${esc(it.key).replace(/'/g, '&#39;')}',${ok ? -1 : 1})">${txt}</button>`; };
+    return `<span class="pcw ${ok ? 'ok' : v ? 'part' : ''}">${v > 0 ? minus(it) : ''}<button class="pc" ${ok ? 'disabled' : ''} onclick="planMark(${pi},'${K(it)}',1)">${txt}</button></span>`; };
   const stats = items.filter(x => x.stat), pos = items.filter(x => x.grp === 'pos'), tea = items.filter(x => x.grp === 'tea');
   const undo = state.planUndo && state.planUndo.pi === pi ? `<div class="pundo"><span>${esc(state.planUndo.text)}</span><button onclick="planUndo()">Отменить</button></div>` : '';
+  const sync = (state.planQ || []).length ? '<div class="psync">сохраняю…</div>' : '';
   return `<div class="card plan ${p.dept ? 'dept' : ''}"><div class="ph"><b>${title}</b><span>${esc(lab)}</span></div>
     ${stats.length ? `<div class="ps">${stats.map(stat).join('')}</div>` : ''}
-    ${can ? '<div class="phint">Выполнил — нажми, количество уменьшится. Нажми на выполненную позицию, чтобы вернуть её.</div>' : ''}
+    ${can ? '<div class="phint">Выполнил — нажми, количество уменьшится. «−» возвращает одну.</div>' : ''}
     ${pos.length ? `<div class="lbl">Обязательные позиции</div><div class="chips2">${pos.map(chip).join('')}</div>` : ''}
     ${tea.length ? `<div class="lbl">Чай</div><div class="chips2">${tea.map(chip).join('')}</div>` : ''}
-    ${undo}${state.planErr && state.planErr.pi === pi ? `<div class="perr">${esc(state.planErr.t)}</div>` : ''}
+    ${undo}${can ? sync : ''}${state.planErr && state.planErr.pi === pi ? `<div class="perr">${esc(state.planErr.t)}</div>` : ''}
     ${p.note ? `<div class="lbl">Заметка</div><div class="pn">${esc(p.note)}</div>` : ''}
 </div>`;
 }
-async function planMark(pi, key, delta, isUndo) {
-  const d = state.data, p = (d.plans || [])[pi]; if (!p || state.planBusy != null) return;
+/* Отметки применяются сразу, а на сервер уходят очередью в фоне */
+function planMark(pi, key, delta, isUndo) {
+  const d = state.data, p = (d.plans || [])[pi]; if (!p) return;
   const it = planItems(p).find(x => x.key === key); if (!it) return;
   p.done = p.done || {};
   const cur = p.done[key] || 0;
   if (delta < 0 && cur <= 0) return;
-  state.planBusy = pi; state.planErr = null; p.done[key] = cur + delta;
+  if (delta > 0 && !it.stat && cur >= it.qty) return;
+  p.done[key] = cur + delta; state.planErr = null;
   clearTimeout(state.planUndoT);
-  state.planUndo = isUndo ? null : { pi, key, delta, text: `${it.stat ? it.label.charAt(0).toUpperCase() + it.label.slice(1) : it.label}: ${delta > 0 ? '+1' : '−1'}` };
-  render();
-  try {
-    const r = await api({ ...state.auth, action: 'planMark', date: p.date, who: p.who, key, delta });
-    if (r.ok && r.plans) d.plans = r.plans;
-    else { p.done[key] = cur; state.planUndo = null; state.planErr = { pi, t: r.error || 'Не получилось' }; }
-  } catch (e) { p.done[key] = cur; state.planUndo = null; state.planErr = { pi, t: 'Нет связи — отметка не сохранилась' }; }
-  state.planBusy = null; saveCache(d); render();
-  if (state.planUndo) state.planUndoT = setTimeout(() => { state.planUndo = null; if (state.view === 'plans') render(); }, 6000);
+  state.planUndo = isUndo ? null : { pi, key, delta, text: `${it.stat ? it.label.charAt(0).toUpperCase() + it.label.slice(1) : it.label}: ${delta > 0 ? 'выполнено +1' : 'возвращено −1'}` };
+  if (state.planUndo) state.planUndoT = setTimeout(() => { state.planUndo = null; if (state.view === 'plans') render(); }, 5000);
+  (state.planQ = state.planQ || []).push({ pi, date: p.date, who: p.who, key, delta });
+  saveCache(d); render(); planFlush();
 }
-function planUndo() { const u = state.planUndo; if (!u) return; state.planUndo = null; planMark(u.pi, u.key, -u.delta, true); }
+function planUndo() { const u = state.planUndo; if (!u) return; clearTimeout(state.planUndoT); state.planUndo = null; planMark(u.pi, u.key, -u.delta, true); }
+async function planFlush() {
+  if (state.planSending) return;
+  state.planSending = true;
+  const d = state.data; let last = null;
+  while ((state.planQ || []).length) {
+    const op = state.planQ[0];
+    try {
+      const r = await api({ ...state.auth, action: 'planMark', date: op.date, who: op.who, key: op.key, delta: op.delta });
+      state.planQ.shift();
+      if (r.ok && r.plans) last = r.plans;
+      else if (r.error && !/уже выполнена|нечего отменять/i.test(r.error)) state.planErr = { pi: op.pi, t: r.error };
+    } catch (e) {
+      state.planErr = { pi: op.pi, t: 'Нет связи — повторю отправку автоматически' };
+      state.planSending = false; render();
+      setTimeout(planFlush, 8000); return;
+    }
+  }
+  state.planSending = false;
+  if (last && d === state.data) { d.plans = last; saveCache(d); }
+  if (state.view === 'plans') render();
+}
 
 function viewPlans() {
   const d = state.data, me = d.me, today = toDate(todayStr());
