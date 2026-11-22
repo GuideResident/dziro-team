@@ -167,6 +167,11 @@
   .plan .chips2 .pcw .pc{background:none;border:0;padding:5px 10px;opacity:1}
   .plan .chips2 .pcw.ok .pc{color:var(--terra)}
   .psync{font-size:12px;color:var(--sage);margin-top:8px}
+  .plan .chips2 .padd{font:inherit;font-size:14px;padding:8px 13px;border-radius:99px;background:none;border:1px dashed rgba(239,231,220,.5);color:var(--cream);cursor:pointer}
+  .xpick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding:10px;border-radius:14px;background:rgba(0,0,0,.15)}
+  .xpick button{font:inherit;font-size:14px;padding:7px 12px;border-radius:99px;border:0;background:rgba(239,231,220,.9);color:var(--terra);cursor:pointer}
+  .xpick button:active{transform:scale(.95)}
+  .tmk{font-size:11.5px;color:var(--cream);opacity:.75;margin:-6px 0 10px}
   .phint{font-size:12px;color:var(--sage);margin:-4px 0 4px}
   .pundo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:8px 8px 8px 14px;border-radius:12px;background:rgba(0,0,0,.18);font-size:13px}
   .pundo button{border:0;background:var(--cream);color:var(--terra);border-radius:10px;padding:7px 12px;font:inherit;font-size:13px;font-weight:500;cursor:pointer}
@@ -638,6 +643,11 @@ function shiftCard(s, cls = '') {
 
 
 const nk = n => String(n || '').toLowerCase().replace(/ё/g, 'е').split(/\s+/).filter(Boolean).sort().join(' ');
+function teamMarks(name) {
+  const mm = (state.data.monthMarks || {})[lowKey(name)]; if (!mm || !mm.total) return '';
+  const by = Object.keys(mm.by || {}).sort((a, b) => mm.by[b] - mm.by[a]).map(w => `${esc(w.split(' ')[0])} ${mm.by[w]}`).join(' · ');
+  return `<div class="tmk">отмечено командой: ${mm.total}${by ? ' — ' + by : ''}</div>`;
+}
 function monBlock(m) {
   if (!m) return '';
   const f = (x, money) => money ? rub(x) : Math.round(x).toLocaleString('ru-RU');
@@ -652,7 +662,7 @@ function monBlock(m) {
   const pos = (m.positions || []).filter(x => x.plan > 0 || x.fact > 0);
   return `<div class="card plan dept"><div class="ph"><b>Выполнение плана</b><span>${esc(m.title || '')}</span></div><div class="mon" style="margin-top:0;border:0;padding-top:0">
     ${row('Выручка кальянов', m.hookahRev, true)}${row('Кальянов', m.hookahCnt)}${row('Выручка чая', m.teaRev, true)}${row('Чая (досок)', m.teaCnt)}${row('Допустимые перезабивы', m.refills, false, true)}
-    ${pos.length ? '<div class="mh" style="margin-top:14px">Позиции кальянов</div>' + pos.map(x => row(x.name, [x.plan, x.fact])).join('') : ''}</div></div>`;
+    ${pos.length ? '<div class="mh" style="margin-top:14px">Позиции кальянов</div>' + pos.map(x => row(x.name, [x.plan, x.fact]) + teamMarks(x.name)).join('') : ''}</div></div>`;
 }
 function planItems(p) {
   const out = [], n = v => parseFloat(String(v || '').replace(',', '.')) || 0;
@@ -666,6 +676,18 @@ function planItems(p) {
   });
   list(p.positions, 'p:', 'pos'); list(p.tea, 'c:', 'tea');
   return out;
+}
+function monthPosNames() { const m = state.data.month; return ((m && m.positions) || []).filter(x => x.plan > 0).map(x => x.name); }
+const lowKey = n => String(n).toLowerCase().replace(/ё/g, 'е');
+function extraBlock(p, pi, K, minus) {
+  const names = monthPosNames(); if (!names.length) return '';
+  const ex = p.extra || {}, label = k => (names.find(n => 'x:' + lowKey(n) === k) || k.slice(2));
+  const keys = Object.keys(ex).filter(k => ex[k] > 0);
+  const open = state.extraOpen === pi;
+  return `<div class="lbl">Сверх плана <span style="opacity:.7">· позиции из плана месяца</span></div><div class="chips2">
+    ${keys.map(k => `<span class="pcw part">${minus({ key: k })}<button class="pc" onclick="planMark(${pi},'${esc(k).replace(/'/g, '&#39;')}',1)">${esc(label(k))} <em>${ex[k]}</em></button></span>`).join('')}
+    <button class="pc padd" onclick="state.extraOpen=${open ? 'null' : pi};render()">${open ? 'Скрыть' : '+ Сверх плана'}</button></div>
+    ${open ? `<div class="xpick">${names.map(n => `<button onclick="planMark(${pi},'x:${esc(lowKey(n)).replace(/'/g, '&#39;')}',1)">${esc(n)}</button>`).join('')}</div>` : ''}`;
 }
 function planCard(p, showWho, pi) {
   const dt = toDate(p.date), t = todayStr() === p.date, d = state.data;
@@ -692,6 +714,7 @@ function planCard(p, showWho, pi) {
     ${can ? '<div class="phint">Выполнил — нажми, количество уменьшится. «−» возвращает одну.</div>' : ''}
     ${pos.length ? `<div class="lbl">Обязательные позиции</div><div class="chips2">${pos.map(chip).join('')}</div>` : ''}
     ${tea.length ? `<div class="lbl">Чай</div><div class="chips2">${tea.map(chip).join('')}</div>` : ''}
+    ${can ? extraBlock(p, pi, K, minus) : ''}
     ${undo}${can ? sync : ''}${state.planErr && state.planErr.pi === pi ? `<div class="perr">${esc(state.planErr.t)}</div>` : ''}
     ${p.note ? `<div class="lbl">Заметка</div><div class="pn">${esc(p.note)}</div>` : ''}
 </div>`;
@@ -699,12 +722,14 @@ function planCard(p, showWho, pi) {
 /* Отметки применяются сразу, а на сервер уходят очередью в фоне */
 function planMark(pi, key, delta, isUndo) {
   const d = state.data, p = (d.plans || [])[pi]; if (!p) return;
-  const it = planItems(p).find(x => x.key === key); if (!it) return;
-  p.done = p.done || {};
-  const cur = p.done[key] || 0;
+  const isX = key.indexOf('x:') === 0;
+  const it = isX ? { key, label: (monthPosNames().find(n => 'x:' + lowKey(n) === key) || key.slice(2)), stat: 0, qty: Infinity } : planItems(p).find(x => x.key === key); if (!it) return;
+  p.done = p.done || {}; p.extra = p.extra || {};
+  const bucket = isX ? p.extra : p.done;
+  const cur = bucket[key] || 0;
   if (delta < 0 && cur <= 0) return;
   if (delta > 0 && !it.stat && cur >= it.qty) return;
-  p.done[key] = cur + delta; state.planErr = null;
+  bucket[key] = cur + delta; state.planErr = null;
   clearTimeout(state.planUndoT);
   state.planUndo = isUndo ? null : { pi, key, delta, text: `${it.stat ? it.label.charAt(0).toUpperCase() + it.label.slice(1) : it.label}: ${delta > 0 ? 'выполнено +1' : 'возвращено −1'}` };
   if (state.planUndo) state.planUndoT = setTimeout(() => { state.planUndo = null; if (state.view === 'plans') render(); }, 5000);
@@ -722,6 +747,7 @@ async function planFlush() {
       const r = await api({ ...state.auth, action: 'planMark', date: op.date, who: op.who, key: op.key, delta: op.delta });
       state.planQ.shift();
       if (r.ok && r.plans) last = r.plans;
+      if (r.ok && r.monthMarks) d.monthMarks = r.monthMarks;
       else if (r.error && !/уже выполнена|нечего отменять/i.test(r.error)) state.planErr = { pi: op.pi, t: r.error };
     } catch (e) {
       state.planErr = { pi: op.pi, t: 'Нет связи — повторю отправку автоматически' };
